@@ -4,9 +4,4 @@ pandas
 matplotlib
 scikit-learn
 groq
-gtts
-pygame
-pyttsx3
-SpeechRecognition
-streamlit-mic-recorder
 ipaddress
