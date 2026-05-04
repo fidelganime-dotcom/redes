@@ -4,7 +4,6 @@ import time
 import os
 import tempfile
 import re
-import base64
 import ipaddress
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,8 +12,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import deque
 from groq import Groq
-#from streamlit_mic_recorder import speech_to_text
-from claudeai import show_ai_section
+
 # ---------- VERIFICAR DEPENDENCIAS DE VOZ ----------
 try:
     import pyttsx3
@@ -29,12 +27,6 @@ try:
 except:
     GTTS_AVAILABLE = False
 
-try:
-    import speech_recognition as sr
-    SR_AVAILABLE = True
-except:
-    SR_AVAILABLE = False
-
 # ---------- CONFIGURACIÓN STREAMLIT ----------
 st.set_page_config(
     page_title="REDES BÁSICAS - TECNO KIDS", 
@@ -44,9 +36,13 @@ st.set_page_config(
 )
 
 # ---------- CLIENTE GROQ ----------
-client = Groq(api_key="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")
+# Usar secrets en producción, o la clave directa localmente
+try:
+    client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+except:
+    client = Groq(api_key="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")
 
-# ==================== CSS PREMIUM (DEL PRIMER PROYECTO) ====================
+# ==================== CSS PREMIUM ====================
 STYLES = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
@@ -80,13 +76,11 @@ STYLES = """
     box-sizing: border-box;
 }
 
-/* Main app styling */
 .stApp {
     background: linear-gradient(135deg, #0f0c29 0%, #1a1a3e 50%, #24243e 100%);
     background-attachment: fixed;
 }
 
-/* Elegant glass cards */
 .glass-card, .metric-card {
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
@@ -108,50 +102,6 @@ STYLES = """
     box-shadow: var(--hover-shadow);
 }
 
-.metric-card {
-    padding: 20px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-}
-
-.metric-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 3px;
-    background: linear-gradient(90deg, var(--primary), var(--secondary));
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform 0.3s ease;
-}
-
-.metric-card:hover::before {
-    transform: scaleX(1);
-}
-
-.metric-card h3 {
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    color: var(--gray-light);
-    margin-bottom: 12px;
-}
-
-.metric-card h2 {
-    font-size: 2.5rem;
-    font-weight: 700;
-    margin-bottom: 8px;
-}
-
-.metric-card p {
-    font-size: 0.8rem;
-    color: var(--gray-light);
-}
-
-/* Premium headers */
 .premium-title {
     font-size: 2.5rem;
     font-weight: 800;
@@ -183,7 +133,6 @@ STYLES = """
     background: linear-gradient(90deg, var(--primary), var(--secondary));
 }
 
-/* Buttons refined */
 .stButton > button {
     background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
     border: none !important;
@@ -201,44 +150,12 @@ STYLES = """
     box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4) !important;
 }
 
-/* Sidebar elegant */
 [data-testid="stSidebar"] {
     background: rgba(15, 23, 42, 0.8) !important;
     backdrop-filter: blur(16px);
     border-right: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-[data-testid="stSidebar"] .stMarkdown {
-    color: var(--white);
-}
-
-/* Input fields refined */
-.stTextInput > div > div > input,
-.stSelectbox > div > div,
-.stTextArea > div > div > textarea {
-    background: rgba(15, 23, 42, 0.8) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    border-radius: 12px !important;
-    padding: 10px 14px !important;
-    color: var(--white) !important;
-    transition: all 0.3s ease !important;
-}
-
-.stTextInput > div > div > input:focus,
-.stSelectbox > div > div:focus-within,
-.stTextArea > div > div > textarea:focus {
-    border-color: var(--primary) !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2) !important;
-    outline: none !important;
-}
-
-/* Progress bar */
-.stProgress > div > div > div > div {
-    background: linear-gradient(90deg, var(--primary), var(--secondary)) !important;
-    border-radius: 10px !important;
-}
-
-/* Tabs styling */
 .stTabs [data-baseweb="tab-list"] {
     gap: 12px;
     background: rgba(30, 41, 59, 0.5);
@@ -259,102 +176,6 @@ STYLES = """
     color: white;
 }
 
-/* Metric display */
-.metric-value {
-    transition: all 0.3s ease;
-}
-
-.metric-value:hover {
-    transform: scale(1.1);
-    text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
-}
-
-/* Info box */
-.info-box {
-    background: rgba(59, 130, 246, 0.08);
-    border-radius: 20px;
-    padding: 20px;
-    margin: 16px 0;
-    border: 1px solid rgba(59, 130, 246, 0.2);
-    transition: all 0.3s ease;
-}
-
-.info-box:hover {
-    background: rgba(59, 130, 246, 0.12);
-    transform: translateX(4px);
-}
-
-/* Animations */
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes fadeInDown {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-8px); }
-}
-
-/* Scrollbar */
-::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: rgba(59, 130, 246, 0.4);
-    border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: rgba(59, 130, 246, 0.6);
-}
-
-/* Chat bubbles */
-.chat-bubble-user {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: white;
-    border-radius: 20px 20px 5px 20px;
-    padding: 12px 18px;
-    margin: 8px 0;
-    max-width: 80%;
-    align-self: flex-end;
-}
-
-.chat-bubble-bot {
-    background: #1e293b;
-    color: #e2e8f0;
-    border-radius: 20px 20px 20px 5px;
-    padding: 12px 18px;
-    margin: 8px 0;
-    max-width: 80%;
-    align-self: flex-start;
-    border-left: 3px solid #3b82f6;
-}
-
-/* Area cards */
 .area-card {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(8px);
@@ -382,7 +203,6 @@ STYLES = """
     font-size: 0.9rem;
 }
 
-/* Component card */
 .component-card {
     background: rgba(255,255,255,0.05);
     border-radius: 16px;
@@ -397,15 +217,6 @@ STYLES = """
     background: rgba(255,255,255,0.08);
 }
 
-/* Latency container */
-.latency-container {
-    background: rgba(0,0,0,0.3);
-    border-radius: 16px;
-    padding: 15px;
-    margin: 10px 0;
-}
-
-/* Question box */
 .question-box {
     background: linear-gradient(135deg, rgba(30, 58, 138, 0.85), rgba(37, 99, 235, 0.85));
     border-radius: 28px;
@@ -422,7 +233,6 @@ STYLES = """
     border-radius: 20px;
 }
 
-/* Feedback */
 .feedback-correcto {
     background: rgba(34, 197, 94, 0.2);
     color: #4ade80;
@@ -441,7 +251,6 @@ STYLES = """
     backdrop-filter: blur(8px);
 }
 
-/* Medal display */
 .medalla {
     font-size: 1.3rem;
     text-align: center;
@@ -452,7 +261,6 @@ STYLES = """
     border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
-/* Score display */
 .puntaje {
     background: linear-gradient(135deg, #F59E0B, #D97706);
     padding: 8px 20px;
@@ -464,7 +272,6 @@ STYLES = """
     box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
 }
 
-/* Mascota container */
 .mascota-container {
     position: fixed;
     bottom: 20px;
@@ -494,12 +301,6 @@ STYLES = """
     animation: fadeInOut 4s infinite;
 }
 
-@keyframes fadeInOut {
-    0%, 100% { opacity: 0; transform: scale(0.9); }
-    10%, 90% { opacity: 1; transform: scale(1); }
-}
-
-/* Watermark */
 .watermark {
     position: fixed;
     bottom: 15px;
@@ -515,17 +316,45 @@ STYLES = """
     z-index: 999;
 }
 
-/* Responsive */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0; transform: scale(0.9); }
+    10%, 90% { opacity: 1; transform: scale(1); }
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.4);
+    border-radius: 10px;
+}
+
 @media (max-width: 768px) {
-    .premium-title {
-        font-size: 1.8rem;
-    }
-    .section-title {
-        font-size: 1.2rem;
-    }
-    .question-text {
-        font-size: 1rem;
-    }
+    .premium-title { font-size: 1.8rem; }
+    .section-title { font-size: 1.2rem; }
+    .question-text { font-size: 1rem; }
 }
 </style>
 
@@ -536,27 +365,17 @@ st.markdown(STYLES, unsafe_allow_html=True)
 
 # ==================== BASE DE CONOCIMIENTO ====================
 knowledge = {
-    "¿qué es una red?": "Una red de computadoras es un conjunto de dispositivos conectados que comparten recursos e información. Permite la comunicación entre equipos y el acceso a datos de forma remota.",
-    "¿para qué sirve una red?": "Sirve para compartir datos, impresoras, internet, comunicarse entre dispositivos, realizar videollamadas, enviar correos, jugar en línea y acceder a información desde cualquier lugar.",
-    "diferencias entre lan y wan": "LAN es red local (corto alcance, alta velocidad, baja latencia, propiedad privada). WAN es red amplia (Internet, conexiones entre ciudades, mayor latencia, operada por empresas de telecomunicaciones).",
-    "¿qué es el modelo osi?": "Modelo de 7 capas que estandariza la comunicación: Física (cables), Enlace (MAC), Red (IP), Transporte (TCP/UDP), Sesión, Presentación, Aplicación. Creado por ISO en 1984.",
-    "capas del modelo osi": "1️⃣ Física, 2️⃣ Enlace de Datos, 3️⃣ Red, 4️⃣ Transporte, 5️⃣ Sesión, 6️⃣ Presentación, 7️⃣ Aplicación.",
-    "¿qué hace la capa de red?": "La capa de red (capa 3) se encarga del direccionamiento IP, el enrutamiento de paquetes entre redes diferentes, y la fragmentación de datos cuando es necesario.",
-    "¿qué es una dirección ipv4?": "Es un número único de 32 bits que identifica cada dispositivo en una red IP. Se escribe como 4 números decimales entre 0 y 255 separados por puntos. Ejemplo: 192.168.1.1",
-    "¿qué es una máscara de subred?": "Indica qué parte de la IP es red y qué parte es host. Ejemplo: 255.255.255.0 significa que los primeros 24 bits son red y los últimos 8 son para hosts.",
-    "¿qué es subneteo?": "Subneteo es dividir una red grande en redes más pequeñas llamadas subredes. Esto mejora la administración, reduce broadcasts y aumenta la seguridad y el rendimiento.",
-    "¿qué es un router?": "Dispositivo de capa 3 que conecta redes diferentes y envía paquetes IP entre ellas usando tablas de enrutamiento. También hace NAT y firewall básico.",
-    "¿qué es un switch?": "Dispositivo de capa 2 que conecta dispositivos dentro de una misma red usando direcciones MAC. Es inteligente: envía datos solo al puerto del destinatario.",
-    "comandos cisco básicos": "enable (modo privilegiado), configure terminal (configuración), interface (configurar puerto), ip address (asignar IP), no shutdown (activar), show ip interface brief (ver estado).",
-    "tipos de cables de red": "UTP (cable de par trenzado sin blindaje) el más común, STP (blindado), fibra óptica (largas distancias, alta velocidad), coaxial (antiguo, ahora en cablemódem).",
-    "¿qué es un gateway?": "Puerta de enlace, dispositivo que permite a una red local comunicarse con redes externas. Normalmente es un router con IP como 192.168.1.1 o 192.168.0.1.",
-    "¿qué es arp?": "Protocolo de resolución de direcciones que traduce direcciones IP a direcciones MAC dentro de una red local. Funciona con broadcasts.",
-    "¿qué es icmp?": "Protocolo usado para mensajes de error y diagnóstico. El comando ping usa ICMP Echo Request y Echo Reply. Traceroute también lo usa.",
-    "tcp vs udp": "TCP es orientado a conexión, confiable, ordena paquetes, tiene control de flujo. UDP es más rápido, sin conexión, no garantiza entrega. Ideal para streaming y juegos.",
-    "seguridad en router": "Cambiar contraseñas por defecto, usar WPA2/WPA3, desactivar WPS, actualizar firmware, deshabilitar administración remota, activar firewall.",
-    "¿qué es dhcp?": "Protocolo que asigna automáticamente direcciones IP a los dispositivos de una red. Usa DORA: Discover, Offer, Request, Acknowledge.",
-    "¿qué es vlan?": "Red virtual que separa el tráfico en capa 2, mejorando seguridad y reduciendo broadcasts. Permite tener múltiples redes lógicas en un mismo switch físico.",
-    "¿qué es nat?": "Network Address Translation: traduce IPs privadas a una o varias públicas. Permite que dispositivos con IPs privadas accedan a Internet.",
+    "¿qué es una red?": "Una red de computadoras es un conjunto de dispositivos conectados que comparten recursos e información.",
+    "¿para qué sirve una red?": "Sirve para compartir datos, impresoras, internet, comunicarse entre dispositivos.",
+    "diferencias entre lan y wan": "LAN es red local (corto alcance). WAN es red amplia (Internet).",
+    "¿qué es el modelo osi?": "Modelo de 7 capas que estandariza la comunicación.",
+    "capas del modelo osi": "1️⃣ Física, 2️⃣ Enlace, 3️⃣ Red, 4️⃣ Transporte, 5️⃣ Sesión, 6️⃣ Presentación, 7️⃣ Aplicación.",
+    "¿qué es una dirección ipv4?": "Número único de 32 bits que identifica cada dispositivo.",
+    "¿qué es un router?": "Dispositivo de capa 3 que conecta redes diferentes.",
+    "¿qué es un switch?": "Dispositivo de capa 2 que conecta dispositivos en una misma red.",
+    "¿qué es dhcp?": "Protocolo que asigna automáticamente direcciones IP.",
+    "¿qué es vlan?": "Red virtual que separa el tráfico en capa 2.",
+    "¿qué es nat?": "Traduce IPs privadas a públicas para acceder a Internet.",
 }
 
 preguntas_db = list(knowledge.keys())
@@ -595,9 +414,7 @@ def generar_preguntas():
         ("¿Qué dispositivo conecta una LAN a Internet?", ["Router", "Switch", "Hub", "Repetidor"], "Router"),
         ("¿Qué topología usa un switch central?", ["Estrella", "Bus", "Anillo", "Malla"], "Estrella"),
         ("¿Qué es un servidor?", ["Dispositivo que ofrece servicios", "Un cable", "Un conector", "Un protocolo"], "Dispositivo que ofrece servicios"),
-        ("¿Qué es un cliente en redes?", ["Dispositivo que solicita servicios", "El cable principal", "El switch", "El router"], "Dispositivo que solicita servicios"),
         ("¿Cuál es la red más grande del mundo?", ["Internet", "Intranet", "Extranet", "LAN"], "Internet"),
-        ("¿Qué es una topología de red?", ["Forma de conectar dispositivos", "Tipo de cable", "Velocidad", "Protocolo"], "Forma de conectar dispositivos"),
         ("¿Qué significa NIC?", ["Network Interface Card", "Network Internet Card", "New Interface Card", "Null Interface Card"], "Network Interface Card"),
     ]
     osi = [
@@ -606,10 +423,6 @@ def generar_preguntas():
         ("¿Qué capa se encarga del direccionamiento IP?", ["Red", "Transporte", "Aplicación", "Sesión"], "Red"),
         ("¿Qué capa usa direcciones MAC?", ["Enlace de Datos", "Red", "Física", "Transporte"], "Enlace de Datos"),
         ("¿Qué capa transmite bits?", ["Física", "Enlace", "Red", "Transporte"], "Física"),
-        ("¿Qué capa asegura entrega confiable?", ["Transporte", "Red", "Sesión", "Presentación"], "Transporte"),
-        ("¿Qué protocolo trabaja en capa de transporte?", ["TCP", "IP", "ARP", "HTTP"], "TCP"),
-        ("¿Cuál es la PDU en capa de red?", ["Paquete", "Trama", "Segmento", "Bit"], "Paquete"),
-        ("¿Qué capa hace enrutamiento?", ["Red", "Transporte", "Enlace", "Física"], "Red"),
     ]
     ipv4 = [
         ("¿Cuántos bits tiene IPv4?", ["32", "64", "128", "16"], "32"),
@@ -617,55 +430,36 @@ def generar_preguntas():
         ("¿Rango de clase A?", ["1-126", "128-191", "192-223", "224-239"], "1-126"),
         ("¿Dirección de loopback?", ["127.0.0.1", "0.0.0.0", "255.255.255.255", "192.168.1.1"], "127.0.0.1"),
         ("¿Qué es IP privada?", ["No accesible desde Internet", "Accesible mundialmente", "Solo servidores", "IP de broadcast"], "No accesible desde Internet"),
-        ("¿IP privada clase C?", ["192.168.x.x", "10.x.x.x", "172.16.x.x", "169.254.x.x"], "192.168.x.x"),
-        ("¿Comando para ver IP en Windows?", ["ipconfig", "ifconfig", "netstat", "ping"], "ipconfig"),
-        ("¿Hosts útiles en /24?", ["254", "256", "128", "512"], "254"),
-        ("¿Máscara clase C por defecto?", ["255.255.255.0", "255.255.0.0", "255.0.0.0", "255.255.255.255"], "255.255.255.0"),
     ]
     subnet = [
         ("¿Máscara /24?", ["255.255.255.0", "255.255.0.0", "255.0.0.0", "255.255.255.128"], "255.255.255.0"),
         ("¿Bits de host en /26?", ["6", "8", "2", "4"], "6"),
         ("¿Hosts por subred en /28?", ["14", "16", "30", "62"], "14"),
-        ("¿Máscara /30?", ["255.255.255.252", "255.255.255.248", "255.255.255.240", "255.255.255.224"], "255.255.255.252"),
         ("¿Para qué subnetear?", ["Optimizar direcciones", "Aumentar velocidad", "Reducir colisiones", "Conectar redes"], "Optimizar direcciones"),
-        ("¿Hosts útiles en /29?", ["6", "8", "10", "14"], "6"),
     ]
     dispositivos = [
         ("¿Qué conecta redes diferentes?", ["Router", "Switch", "Hub", "Bridge"], "Router"),
         ("¿Qué usa direcciones MAC?", ["Switch", "Router", "Gateway", "Repetidor"], "Switch"),
         ("¿Comando modo privilegiado Cisco?", ["enable", "config t", "interface", "show"], "enable"),
-        ("¿Comando ver tabla MAC?", ["show mac address-table", "show ip interface brief", "show running-config", "show vlan"], "show mac address-table"),
         ("¿Qué hace 'no shutdown'?", ["Activar interfaz", "Desactivar", "Borrar", "Reiniciar"], "Activar interfaz"),
-        ("¿Guardar configuración Cisco?", ["copy running-config startup-config", "write memory", "save config", "write"], "copy running-config startup-config"),
-        ("¿Capa del switch?", ["Capa 2", "Capa 1", "Capa 3", "Capa 4"], "Capa 2"),
-        ("¿Capa del router?", ["Capa 3", "Capa 2", "Capa 4", "Capa 1"], "Capa 3"),
     ]
     cables = [
         ("¿Conector UTP común?", ["RJ45", "BNC", "LC", "USB"], "RJ45"),
         ("¿Distancia máxima UTP?", ["100 m", "50 m", "200 m", "500 m"], "100 m"),
         ("¿Cable para dos PCs directo?", ["Crossover", "Directo", "Rollover", "Fibra"], "Crossover"),
         ("¿Cable PC a switch?", ["Directo", "Crossover", "Rollover", "Fibra"], "Directo"),
-        ("¿Categoría Gigabit?", ["Cat5e", "Cat5", "Cat3", "Cat4"], "Cat5e"),
-        ("¿Ventaja fibra vs cobre?", ["Inmunidad EMI", "Menor costo", "Más fácil", "No conectores"], "Inmunidad EMI"),
-        ("¿Qué significa UTP?", ["Unshielded Twisted Pair", "Universal TP", "Unidirectional TP", "Unshielded Transmission"], "Unshielded Twisted Pair"),
     ]
     protocolos = [
         ("¿Protocolo de ping?", ["ICMP", "TCP", "UDP", "ARP"], "ICMP"),
         ("¿Qué hace ARP?", ["Resuelve IP a MAC", "MAC a IP", "Asigna IP", "Enruta"], "Resuelve IP a MAC"),
         ("¿Qué significa TCP?", ["Transmission Control Protocol", "Transfer CP", "Transport CP", "Trunk CP"], "Transmission Control Protocol"),
         ("¿Qué significa UDP?", ["User Datagram Protocol", "Universal DP", "Unreliable DP", "Uniform DP"], "User Datagram Protocol"),
-        ("¿Protocolo asigna IP automática?", ["DHCP", "DNS", "ARP", "ICMP"], "DHCP"),
-        ("¿Traduce nombre a IP?", ["DNS", "DHCP", "ARP", "ICMP"], "DNS"),
-        ("¿Puerto HTTP?", ["80", "443", "25", "22"], "80"),
-        ("¿Puerto HTTPS?", ["443", "80", "8080", "25"], "443"),
     ]
     seg_nat = [
         ("¿Qué hace DHCP?", ["Asigna IP automática", "Resuelve nombres", "Enruta", "Cifra"], "Asigna IP automática"),
         ("¿Qué significa NAT?", ["Network Address Translation", "Network Access Translation", "Network Address Table", "Network Automatic Translation"], "Network Address Translation"),
         ("¿Para qué sirve NAT?", ["IPs privadas a Internet", "Aumentar velocidad", "Cifrar", "Filtrar"], "IPs privadas a Internet"),
-        ("¿Qué significa PAT?", ["Port Address Translation", "Packet Address Translation", "Protocol Address Translation", "Private Address Translation"], "Port Address Translation"),
         ("¿Qué es VLAN?", ["Red virtual capa 2", "Red de área local", "VPN", "Red inalámbrica"], "Red virtual capa 2"),
-        ("¿IPs privadas clase C?", ["192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12", "169.254.0.0/16"], "192.168.0.0/16"),
     ]
     return cb, osi, ipv4, subnet, dispositivos, cables, protocolos, seg_nat
 
@@ -680,50 +474,9 @@ for idx, base in enumerate(bases):
         preguntas_quiz.append({"area": areas_nombres[idx], "tipo": "multiple", "pregunta": p[0], "opciones": opciones_mezcladas, "respuesta": respuesta_correcta})
 
 # ==================== FUNCIONES DE VOZ ====================
-def speak_human(text, voice_gender, speed="Normal"):
-    if not PYTTSX3_AVAILABLE:
-        speak_gtts(text, speed)
-        return
-    clean = re.sub(r'[^\w\sáéíóúñ]', '', text)
-    try:
-        engine = pyttsx3.init()
-        engine.setProperty('rate', 150 if speed=="Normal" else 120)
-        voices = engine.getProperty('voices')
-        keywords = {"Hombre": ["male","raul","diego"], "Mujer":["female","sabina","helena"], "Niño":["boy","child"], "Niña":["girl","child"]}
-        selected_id = None
-        for v in voices:
-            v_name = v.name.lower()
-            if any(k in v_name for k in keywords.get(voice_gender, [])):
-                selected_id = v.id
-                break
-        if selected_id:
-            engine.setProperty('voice', selected_id)
-        engine.say(clean)
-        engine.runAndWait()
-        engine.stop()
-    except:
-        speak_gtts(text, speed)
-
-def speak_gtts(text, speed="Normal"):
-    if not GTTS_AVAILABLE:
-        return
-    clean = re.sub(r'[^\w\sáéíóúñ]', '', text)
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as f:
-            tmp = f.name
-        tts = gTTS(clean, lang="es", slow=(speed=="Lenta"))
-        tts.save(tmp)
-        pygame.mixer.music.load(tmp)
-        pygame.mixer.music.play()
-        while pygame.mixer.music.get_busy():
-            time.sleep(0.1)
-        pygame.mixer.music.unload()
-        os.unlink(tmp)
-    except:
-        pass
-
 def speak(text, voice_type, speed="Normal"):
-    speak_human(text, voice_type, speed)
+    # Función simplificada - no reproduce audio en la nube
+    pass
 
 # ==================== SIMULACIONES ====================
 if "latency_data" not in st.session_state:
@@ -860,16 +613,14 @@ def componentes_red():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown("### 🖧 Componentes de Red")
     comps = {
-        "🖥️ NIC (Tarjeta de red)": "Permite conectar un dispositivo a la red (cableada o inalámbrica).",
+        "🖥️ NIC": "Permite conectar un dispositivo a la red.",
         "🔌 RJ45": "Conector estándar para cables UTP.",
-        "🔄 Switch": "Conecta dispositivos en una misma red usando direcciones MAC.",
-        "🌐 Router": "Conecta redes diferentes y enruta paquetes IP.",
+        "🔄 Switch": "Conecta dispositivos en una misma red.",
+        "🌐 Router": "Conecta redes diferentes y enruta.",
         "📡 Access Point": "Proporciona conectividad WiFi.",
-        "🔌 Cable UTP": "Par trenzado sin blindaje, usado en redes Ethernet.",
-        "💡 Fibra óptica": "Utiliza luz para transmitir datos, larga distancia e inmunidad a interferencias.",
+        "💡 Fibra óptica": "Larga distancia, inmunidad a interferencias.",
         "🛡️ Firewall": "Filtra tráfico según reglas de seguridad.",
-        "🗄️ Servidor": "Ofrece servicios (DHCP, DNS, web, etc.) a los clientes.",
-        "🚪 Gateway": "Puerta de enlace que permite salir de la red local a Internet."
+        "🚪 Gateway": "Puerta de enlace a otras redes."
     }
     cols = st.columns(2)
     for i, (nombre, desc) in enumerate(comps.items()):
@@ -1003,23 +754,20 @@ if "puntaje" not in st.session_state:
     st.session_state.topologia_actual = None
     st.session_state.mensaje_mascota = "🌟 ¡Aprende conmigo!"
     st.session_state.messages = []
-    st.session_state.mute_audio = False
+    st.session_state.mute_audio = True
     st.session_state.input_text = ""
 
 mensajes_mascota = [
     "🌟 ¡Excelente! Sigue así, eres un genio de las redes.",
-    "💡 Recuerda: cada gran experto fue una vez principiante. ¡Tú puedes!",
+    "💡 Recuerda: cada gran experto fue una vez principiante.",
     "🎯 ¡Acertaste! La práctica hace al maestro.",
     "📚 ¿Sabías que las redes son el internet que usas a diario?",
-    "🚀 ¡Vamos por más! El conocimiento es poder.",
-    "🏆 ¡Eres increíble! Sigue aprendiendo sobre redes.",
-    "🔐 La seguridad en redes comienza contigo. ¡Sigue así!"
+    "🚀 ¡Vamos por más! El conocimiento es poder."
 ]
 
 def hablar_mascota():
     mensaje = random.choice(mensajes_mascota)
     st.session_state.mensaje_mascota = mensaje
-    speak(mensaje, st.session_state.voice_type, st.session_state.speed)
 
 def nueva_partida(area):
     filtradas = [p for p in preguntas_quiz if p["area"]==area]
@@ -1040,11 +788,9 @@ def responder_quiz(resp, pregunta):
         st.session_state.puntaje += 10
         st.session_state.feedback = f"✅ ¡Correcto! +10 puntos"
         st.session_state.correcta = True
-        speak("Correcto. Ganaste 10 puntos.", st.session_state.voice_type, st.session_state.speed)
     else:
         st.session_state.feedback = f"❌ Incorrecto. Respuesta: {pregunta['respuesta']}"
         st.session_state.correcta = False
-        speak(f"Incorrecto. La respuesta correcta es: {pregunta['respuesta']}", st.session_state.voice_type, st.session_state.speed)
     st.session_state.indice += 1
     st.rerun()
 
@@ -1075,7 +821,7 @@ with st.sidebar:
     st.markdown("## ⚙️ Configuración")
     
     voice_opts = ["👨 Hombre","👩 Mujer","🧒 Niño","👧 Niña"]
-    sel = st.selectbox("🎤 Voz", voice_opts, index=voice_opts.index(st.session_state.voice_type) if st.session_state.voice_type in voice_opts else 0)
+    sel = st.selectbox("🎤 Voz", voice_opts, index=0)
     st.session_state.voice_type = sel
     st.session_state.speed = st.selectbox("⚡ Velocidad", ["Normal","Lenta"])
     
@@ -1093,15 +839,14 @@ with st.sidebar:
     st.markdown("---")
     
     st.markdown("### 🎓 Créditos")
-    st.caption("Proyecto educativo de Redes de Computadoras (Redes II) que integra un chat basado en Inteligencia Artificial con tecnología de Groq para apoyar el aprendizaje interactivo de los estudiantes.Developed by Joswii")
+    st.caption("Proyecto educativo de Redes de Computadoras (Redes II) integra IA con Groq. Developed by Joswii")
     st.markdown('</div>', unsafe_allow_html=True)
-    
 
 # ==================== TABS PRINCIPALES ====================
 st.markdown('<h1 class="premium-title">🌐 REDES II Y TELECOMUNICACIONES</h1>', unsafe_allow_html=True)
 st.markdown('<p style="text-align:center; color:#94a3b8; margin-bottom:30px;">✨ INGENIERIA DE SISTEMAS UAP ✨</p>', unsafe_allow_html=True)
 
-tabs = st.tabs(["📝 Quiz de Redes", "💬 Chat Inteligente", "🔧 Laboratorio de Redes", "🤖 IA con Claude"])
+tabs = st.tabs(["📝 Quiz de Redes", "💬 Chat Inteligente", "🔧 Laboratorio de Redes"])
 
 # -------------------- TAB 1: QUIZ --------------------
 with tabs[0]:
@@ -1111,7 +856,6 @@ with tabs[0]:
     with col_inicio2:
         if st.button("🎉 Mensaje de Bienvenida", use_container_width=True):
             st.balloons()
-            speak("INGENIERIA DE SISTEMAS UNIVERSIDAD AMAZONICA DE PANDO.", st.session_state.voice_type, st.session_state.speed)
     
     st.markdown("### 📡 Elige tu área de conocimiento")
     
@@ -1167,10 +911,6 @@ with tabs[0]:
             st.markdown('<div class="question-box">', unsafe_allow_html=True)
             st.markdown(f'<div class="question-text">📝 {p["pregunta"]}</div>', unsafe_allow_html=True)
             
-            if st.button("🔊 Leer pregunta", key="speak_q"):
-                texto = p["pregunta"] + ". Opciones: " + ", ".join(p["opciones"])
-                speak(texto, st.session_state.voice_type, st.session_state.speed)
-            
             respuesta = st.radio("Selecciona tu respuesta:", p["opciones"], key=f"q{st.session_state.indice}", label_visibility="collapsed")
             
             if st.button("✅ Verificar respuesta", use_container_width=True):
@@ -1192,25 +932,17 @@ with tabs[1]:
     st.markdown("## 💬 Asistente IA de Redes")
     st.markdown("Pregunta sobre redes, protocolos, dispositivos y más. El asistente usa IA avanzada.")
     
-    col_clear, col_mute = st.columns(2)
+    col_clear, _ = st.columns(2)
     with col_clear:
         if st.button("🧹 Limpiar conversación", use_container_width=True):
             st.session_state.messages = []
             st.session_state.chat_history = []
             st.rerun()
-    with col_mute:
-        label_mute = "🔇 Silenciar IA" if not st.session_state.mute_audio else "🔊 Activar IA"
-        if st.button(label_mute, use_container_width=True):
-            st.session_state.mute_audio = not st.session_state.mute_audio
-            st.rerun()
     
-    # Mostrar historial
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
     
- 
-    # Entrada de texto
     user_text = st.text_area(
         "Escribe tu consulta:",
         value=st.session_state.input_text,
@@ -1225,13 +957,12 @@ with tabs[1]:
             st.session_state.input_text = ""
             st.rerun()
     
-    # Procesar respuesta
     if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
         with st.spinner("✨ Pensando..."):
             try:
                 system_prompt = {
                     "role": "system",
-                    "content": "Eres un asistente experto en redes de computadoras. Responde SIEMPRE de forma muy breve y concisa (máximo 2-3 oraciones). Ve directo al punto. Usa un tono natural y humano."
+                    "content": "Eres un asistente experto en redes de computadoras. Responde SIEMPRE de forma muy breve y concisa (máximo 2-3 oraciones). Ve directo al punto."
                 }
                 completion = client.chat.completions.create(
                     model="llama-3.1-8b-instant",
@@ -1241,8 +972,6 @@ with tabs[1]:
                 )
                 respuesta = completion.choices[0].message.content
                 st.session_state.messages.append({"role": "assistant", "content": respuesta})
-                if not st.session_state.mute_audio:
-                    speak(respuesta, st.session_state.voice_type, st.session_state.speed)
                 st.rerun()
             except Exception as e:
                 st.error(f"❌ Error de conexión: {e}")
@@ -1252,61 +981,31 @@ with tabs[1]:
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# -------------------- TAB 3: LABORATORIO MEJORADO --------------------
+# -------------------- TAB 3: LABORATORIO --------------------
 with tabs[2]:
     st.markdown("## 🔧 Laboratorio de Redes")
     st.markdown("Herramientas interactivas para aprender y simular conceptos de redes")
     
-    # ==================== SECCIÓN 1: TOPOLOGÍAS ====================
     st.markdown('<div class="section-title">📡 Topologías de Red Interactivas</div>', unsafe_allow_html=True)
-    
-    # Tarjeta para topologías
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     
     col_top1, col_top2, col_top3, col_top4 = st.columns(4)
     with col_top1:
-        st.markdown("""
-        <div style="text-align:center; padding:15px; background:rgba(59,130,246,0.1); border-radius:16px; margin:5px;">
-            <div style="font-size:2.5rem;">⭐</div>
-            <div style="font-weight:600;">Estrella</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("""<div style="text-align:center; padding:15px; background:rgba(59,130,246,0.1); border-radius:16px;"><div style="font-size:2.5rem;">⭐</div><div style="font-weight:600;">Estrella</div></div>""", unsafe_allow_html=True)
         if st.button("Visualizar Estrella", key="top_estrella", use_container_width=True):
             st.session_state.topologia_actual = "Estrella"
-            speak("Mostrando topología en estrella", st.session_state.voice_type, st.session_state.speed)
-    
     with col_top2:
-        st.markdown("""
-        <div style="text-align:center; padding:15px; background:rgba(139,92,246,0.1); border-radius:16px; margin:5px;">
-            <div style="font-size:2.5rem;">🔄</div>
-            <div style="font-weight:600;">Anillo</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("""<div style="text-align:center; padding:15px; background:rgba(139,92,246,0.1); border-radius:16px;"><div style="font-size:2.5rem;">🔄</div><div style="font-weight:600;">Anillo</div></div>""", unsafe_allow_html=True)
         if st.button("Visualizar Anillo", key="top_anillo", use_container_width=True):
             st.session_state.topologia_actual = "Anillo"
-            speak("Mostrando topología en anillo", st.session_state.voice_type, st.session_state.speed)
-    
     with col_top3:
-        st.markdown("""
-        <div style="text-align:center; padding:15px; background:rgba(16,185,129,0.1); border-radius:16px; margin:5px;">
-            <div style="font-size:2.5rem;">📏</div>
-            <div style="font-weight:600;">Bus</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("""<div style="text-align:center; padding:15px; background:rgba(16,185,129,0.1); border-radius:16px;"><div style="font-size:2.5rem;">📏</div><div style="font-weight:600;">Bus</div></div>""", unsafe_allow_html=True)
         if st.button("Visualizar Bus", key="top_bus", use_container_width=True):
             st.session_state.topologia_actual = "Bus"
-            speak("Mostrando topología en bus", st.session_state.voice_type, st.session_state.speed)
-    
     with col_top4:
-        st.markdown("""
-        <div style="text-align:center; padding:15px; background:rgba(245,158,11,0.1); border-radius:16px; margin:5px;">
-            <div style="font-size:2.5rem;">🔗</div>
-            <div style="font-weight:600;">Malla</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("""<div style="text-align:center; padding:15px; background:rgba(245,158,11,0.1); border-radius:16px;"><div style="font-size:2.5rem;">🔗</div><div style="font-weight:600;">Malla</div></div>""", unsafe_allow_html=True)
         if st.button("Visualizar Malla", key="top_malla", use_container_width=True):
             st.session_state.topologia_actual = "Malla"
-            speak("Mostrando topología en malla", st.session_state.voice_type, st.session_state.speed)
     
     if st.session_state.topologia_actual:
         st.markdown("---")
@@ -1314,161 +1013,25 @@ with tabs[2]:
         if fig:
             st.pyplot(fig)
         
-        detalles_topologias = {
-            "Estrella": {
-                "desc": "Todos los dispositivos se conectan a un switch o hub central.",
-                "ventajas": "✅ Si un cable falla, solo ese dispositivo se desconecta\n✅ Fácil de instalar y administrar\n✅ Centralización de recursos",
-                "desventajas": "❌ Si el switch central falla, toda la red falla\n❌ Mayor cantidad de cable que en Bus"
-            },
-            "Anillo": {
-                "desc": "Cada dispositivo se conecta a otros dos formando un círculo. Los datos viajan en una dirección.",
-                "ventajas": "✅ Organizada y predecible\n✅ No requiere dispositivo central\n✅ Rendimiento uniforme",
-                "desventajas": "❌ Si un dispositivo falla, puede interrumpir toda la red\n❌ Difícil de diagnosticar fallas"
-            },
-            "Bus": {
-                "desc": "Todos los dispositivos comparten un único cable llamado bus.",
-                "ventajas": "✅ Poco cable, económica\n✅ Fácil de instalar\n✅ Ideal para redes pequeñas",
-                "desventajas": "❌ Si el cable principal falla, toda la red falla\n❌ Muchas colisiones de datos\n❌ Bajo rendimiento con muchos dispositivos"
-            },
-            "Malla": {
-                "desc": "Cada dispositivo se conecta a muchos otros, creando redundancia.",
-                "ventajas": "✅ Alta confiabilidad (rutas alternativas)\n✅ Tolerante a fallos\n✅ Privacidad y seguridad",
-                "desventajas": "❌ Muy costosa (mucho cable)\n❌ Difícil de instalar y mantener\n❌ Compleja de administrar"
-            }
+        detalles = {
+            "Estrella": "Todos los dispositivos se conectan a un switch central. Ventaja: si un cable falla, solo ese dispositivo se desconecta.",
+            "Anillo": "Los dispositivos se conectan en círculo. Los datos viajan en una dirección.",
+            "Bus": "Todos los dispositivos comparten un único cable. Es simple pero si el cable falla, toda la red falla.",
+            "Malla": "Cada dispositivo se conecta a muchos otros. Alta confiabilidad pero mayor costo."
         }
-        
-        detalle = detalles_topologias.get(st.session_state.topologia_actual, {})
-        
-        col_desc1, col_desc2 = st.columns(2)
-        with col_desc1:
-            st.markdown(f"""
-            <div style="background: rgba(59,130,246,0.1); border-radius:16px; padding:15px;">
-                <b>📖 Descripción</b><br>{detalle.get('desc', '')}
-            </div>
-            """, unsafe_allow_html=True)
-        with col_desc2:
-            st.markdown(f"""
-            <div style="background: rgba(16,185,129,0.1); border-radius:16px; padding:15px;">
-                <b>✅ Ventajas</b><br>{detalle.get('ventajas', '').replace(chr(10), '<br>')}
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown(f"""
-        <div style="background: rgba(239,68,68,0.1); border-radius:16px; padding:15px; margin-top:10px;">
-            <b>❌ Desventajas</b><br>{detalle.get('desventajas', '').replace(chr(10), '<br>')}
-        </div>
-        """, unsafe_allow_html=True)
+        st.info(detalles.get(st.session_state.topologia_actual, ""))
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # ==================== SECCIÓN 2: HERRAMIENTAS DE RED ====================
     st.markdown('<div class="section-title">🛠️ Herramientas de Diagnóstico</div>', unsafe_allow_html=True)
     
     col_herramienta1, col_herramienta2 = st.columns(2)
-    
     with col_herramienta1:
-        # Ping mejorado
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         simulador_ping("8.8.8.8")
-        st.markdown('</div>', unsafe_allow_html=True)
-    
     with col_herramienta2:
-        # Calculadora de subredes mejorada (sin tabla)
-        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown("### 🧮 Calculadora de Subredes Avanzada")
-        st.markdown("Calcula información detallada de una dirección IP con CIDR")
-        
-        ip_input = st.text_input("📝 Dirección IP con CIDR", placeholder="Ejemplo: 192.168.1.0/24", key="ip_calc")
-        
-        if ip_input:
-            try:
-                red = ipaddress.ip_network(ip_input, strict=False)
-                
-                # Mostrar resultados en tarjetas
-                col_res1, col_res2 = st.columns(2)
-                with col_res1:
-                    st.markdown(f"""
-                    <div style="background:rgba(59,130,246,0.15); border-radius:12px; padding:12px; margin:5px 0;">
-                        <span style="color:#60a5fa;">🌐 Red</span><br>
-                        <b style="font-size:1.1rem;">{red.network_address}</b>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div style="background:rgba(139,92,246,0.15); border-radius:12px; padding:12px; margin:5px 0;">
-                        <span style="color:#a78bfa;">🎭 Broadcast</span><br>
-                        <b style="font-size:1.1rem;">{red.broadcast_address}</b>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with col_res2:
-                    st.markdown(f"""
-                    <div style="background:rgba(16,185,129,0.15); border-radius:12px; padding:12px; margin:5px 0;">
-                        <span style="color:#34d399;">🔢 Máscara</span><br>
-                        <b style="font-size:1.1rem;">{red.netmask}</b>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    st.markdown(f"""
-                    <div style="background:rgba(245,158,11,0.15); border-radius:12px; padding:12px; margin:5px 0;">
-                        <span style="color:#fbbf24;">💻 Hosts útiles</span><br>
-                        <b style="font-size:1.1rem;">{red.num_addresses - 2}</b>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                st.markdown(f"""
-                <div style="background:rgba(255,255,255,0.05); border-radius:12px; padding:12px; margin-top:10px;">
-                    <span style="color:#94a3b8;">📌 Rango de direcciones utilizables</span><br>
-                    <b>{red[1]} → {red[-2]}</b>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Información de clase
-                primera_ip = int(str(red.network_address).split('.')[0])
-                if 1 <= primera_ip <= 126:
-                    clase = "A (Redes grandes)"
-                    mascara_defecto = "255.0.0.0"
-                elif 128 <= primera_ip <= 191:
-                    clase = "B (Redes medianas)"
-                    mascara_defecto = "255.255.0.0"
-                elif 192 <= primera_ip <= 223:
-                    clase = "C (Redes pequeñas)"
-                    mascara_defecto = "255.255.255.0"
-                else:
-                    clase = "Especial (Multicast/Reservada)"
-                    mascara_defecto = "N/A"
-                
-                st.markdown(f"""
-                <div style="background:rgba(255,255,255,0.03); border-radius:12px; padding:10px; margin-top:10px; font-size:0.85rem;">
-                    <b>📊 Información adicional:</b><br>
-                    • Clase IP: {clase}<br>
-                    • Máscara por defecto: {mascara_defecto}<br>
-                    • CIDR: /{red.prefixlen}
-                </div>
-                """, unsafe_allow_html=True)
-                
-            except Exception as e:
-                st.error("❌ Formato inválido. Usa formato como: 192.168.1.0/24")
-        
-        st.markdown("---")
-        
-        # Tabla de referencia rápida de CIDR
-        with st.expander("📚 Tabla de referencia CIDR rápida"):
-            st.markdown("""
-            | CIDR | Máscara | Hosts útiles | Uso típico |
-            |------|---------|--------------|------------|
-            | /24 | 255.255.255.0 | 254 | Redes pequeñas (LAN típica) |
-            | /25 | 255.255.255.128 | 126 | Media red clase C |
-            | /26 | 255.255.255.192 | 62 | Subred pequeña |
-            | /27 | 255.255.255.224 | 30 | Red muy pequeña |
-            | /28 | 255.255.255.240 | 14 | Segmento pequeño |
-            | /29 | 255.255.255.248 | 6 | Enlaces punto a punto |
-            | /30 | 255.255.255.252 | 2 | Enlaces router-router |
-            """)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+        calculadora_subredes()
     
-    # ==================== SECCIÓN 3: TRACEROUTE ====================
-    st.markdown('<div class="section-title">🗺️ Análisis de Ruta (Traceroute)</div>', unsafe_allow_html=True)
-    
+    st.markdown('<div class="section-title">🗺️ Análisis de Ruta</div>', unsafe_allow_html=True)
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     col_trace1, col_trace2 = st.columns([3,1])
     with col_trace1:
@@ -1479,48 +1042,13 @@ with tabs[2]:
             simulador_traceroute(dom)
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # ==================== SECCIÓN 4: COMPONENTES DE RED ====================
     st.markdown('<div class="section-title">🖧 Componentes de Red</div>', unsafe_allow_html=True)
-    
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    
-    componentes_data = {
-        "🖥️ Tarjeta de Red (NIC)": "Permite conectar un dispositivo a la red. Cada NIC tiene una dirección MAC única.",
-        "🔌 Conector RJ45": "Conector estándar para cables UTP/Cat. Tiene 8 pines para transmisión de datos.",
-        "🔄 Switch": "Conecta dispositivos en una misma red. Usa direcciones MAC para enviar datos al destino correcto.",
-        "🌐 Router": "Conecta redes diferentes y enruta paquetes IP. Permite el acceso a Internet.",
-        "📡 Access Point": "Proporciona conectividad WiFi a dispositivos inalámbricos en la red.",
-        "🔌 Cable UTP/FTP": "Par trenzado sin/blindaje. Categorías: Cat5e (1Gbps), Cat6 (10Gbps).",
-        "💡 Fibra Óptica": "Utiliza pulsos de luz para transmitir datos. Larga distancia e inmunidad a interferencias.",
-        "🛡️ Firewall": "Filtra el tráfico según reglas de seguridad. Protege la red de accesos no autorizados.",
-        "🗄️ Servidor": "Ofrece servicios a los clientes: DHCP, DNS, web, correo, archivos.",
-        "🚪 Gateway": "Puerta de enlace que permite salir de la red local hacia otras redes o Internet.",
-        "⚡ PoE": "Power over Ethernet - Alimentación eléctrica a través del cable de red.",
-        "📊 Módem": "Convierte señales digitales a analógicas para conexión al ISP."
-    }
-    
-    # Mostrar componentes en 3 columnas
-    componentes_items = list(componentes_data.items())
-    for i in range(0, len(componentes_items), 3):
-        cols = st.columns(3)
-        for j in range(3):
-            if i + j < len(componentes_items):
-                nombre, desc = componentes_items[i + j]
-                with cols[j]:
-                    st.markdown(f"""
-                    <div class="component-card" style="height: 100%;">
-                        <b style="font-size:1rem;">{nombre}</b>
-                        <p style="color:#94a3b8; font-size:0.8rem; margin-top:8px;">{desc}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+    componentes_red()
 
-# Footer
 st.markdown("---")
 st.markdown("""
 <div style="background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); padding: 20px; border-radius: 16px; text-align: center; border: 1px solid rgba(255,255,255,0.05); margin-top: 20px;">
     <p style="color: #94a3b8; font-size: 0.85rem;">🌐 Proyecto de enseñanza y aprendizaje - Fundamentos de redes de computadoras</p>
-    <p style="color: #64748b; font-size: 0.75rem;">Desarrollado con Claude.AI - Quiz interactivo + Chat con IA Groq + Laboratorio de redes</p>
+    <p style="color: #64748b; font-size: 0.75rem;">Desarrollado con IA - Quiz interactivo + Chat con IA Groq + Laboratorio de redes</p>
 </div>
 """, unsafe_allow_html=True)
