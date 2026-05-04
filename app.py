@@ -13,7 +13,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import deque
 from groq import Groq
-from streamlit_mic_recorder import speech_to_text
+#from streamlit_mic_recorder import speech_to_text
 from claudeai import show_ai_section
 # ---------- VERIFICAR DEPENDENCIAS DE VOZ ----------
 try:
@@ -1209,17 +1209,7 @@ with tabs[1]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
     
-    # Entrada de voz
-    st.markdown("### 🎤 Dictado por voz")
-    texto_voz = speech_to_text(
-        language='es',
-        start_prompt="🎙️ Presiona para hablar",
-        stop_prompt="⏹️ Detener",
-        key='mic_recorder_chat'
-    )
-    if texto_voz and texto_voz != st.session_state.input_text:
-        st.session_state.input_text = texto_voz
-    
+ 
     # Entrada de texto
     user_text = st.text_area(
         "Escribe tu consulta:",
