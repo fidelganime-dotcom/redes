@@ -1,7 +1,11 @@
 streamlit
+streamlit-mic-recorder
+groq
+scikit-learn
+matplotlib
 numpy
 pandas
-matplotlib
-scikit-learn
-groq
-ipaddress
+pyttsx3
+gtts
+pygame
+speechrecognition
